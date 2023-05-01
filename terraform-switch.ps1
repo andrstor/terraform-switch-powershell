@@ -31,7 +31,14 @@ else {
     Write-Host "Available Terraform versions:"
     $versions | ForEach-Object { Write-Host $_ }
     $selectedVersion = Read-Host "Enter the version of Terraform you want to use"
-    
+
+    # Check that the selected version has the correct format
+    $validVersion = $selectedVersion -match '^\d+\.\d+(\.\d+)?$'
+    if (!$validVersion) {
+        Write-Host "Invalid Terraform version number. Please enter a version number in the format 'x.y.z' or 'x.y'."
+        Exit 1
+    }
+
     # Check if the selected version is already installed
     if (Test-Path "$installDir\$selectedVersion") {
         Write-Host "Using Terraform version $selectedVersion"
