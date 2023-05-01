@@ -10,8 +10,12 @@ if ($versions.Count -eq 0) {
     # Download the latest stable Terraform version
     Write-Host "Downloading latest stable Terraform version"
     $latestVersion = Invoke-RestMethod "https://checkpoint-api.hashicorp.com/v1/check/terraform" | Select-Object -ExpandProperty current_version
-    Invoke-WebRequest "https://releases.hashicorp.com/terraform/$latestVersion/terraform_$($latestVersion)_windows_amd64.zip" -OutFile "terraform.zip"
+    $response = Invoke-WebRequest "https://releases.hashicorp.com/terraform/$latestVersion/terraform_$($latestVersion)_windows_amd64.zip" -OutFile "terraform.zip"
 
+    if (!$response -or ($response.StatusCode -eq "404")) {
+        Write-Host "Terraform version $latestVersion does not exist. Please select a valid version."
+        Exit 1
+    }
     # Extract the downloaded zip file
     Write-Host "Extracting Terraform"
     Expand-Archive "terraform.zip" -DestinationPath "$installDir\$latestVersion"
@@ -24,7 +28,8 @@ if ($versions.Count -eq 0) {
     $env:Path = "$installDir\$latestVersion;" + ($env:Path -split ';' | Where-Object { $_ -notlike "*$installDir*" } | Select-Object -Unique)
 
     # Verify that the new Terraform version is installed
-    Write-Host "Terraform version $latestVersion is now installed"
+    Write-Host "Terraform version:"
+    terraform version
 }
 else {
     # Prompt the user to select a version to use
@@ -46,8 +51,12 @@ else {
     else {
         # Download the specified Terraform version
         Write-Host "Downloading Terraform version $selectedVersion"
-        Invoke-WebRequest "https://releases.hashicorp.com/terraform/$selectedVersion/terraform_$($selectedVersion)_windows_amd64.zip" -OutFile "terraform.zip"
+        $response = Invoke-WebRequest "https://releases.hashicorp.com/terraform/$selectedVersion/terraform_$($selectedVersion)_windows_amd64.zip" -OutFile "terraform.zip" -PassThru
 
+        if (!$response -or ($response.StatusCode -eq "404")) {
+            Write-Host "Terraform version $selectedVersion does not exist. Please select a valid version."
+            Exit 1
+        }
         # Extract the downloaded zip file
         Write-Host "Extracting Terraform"
         Expand-Archive "terraform.zip" -DestinationPath "$installDir\$selectedVersion"
@@ -68,7 +77,15 @@ else {
     terraform version
 
     # Persist changes to PATH environment variable across PowerShell sessions
-    $pathVariable = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
-    $pathVariable += ";$installDir\$selectedVersion"
-    [System.Environment]::SetEnvironmentVariable("Path", $pathVariable, "Machine")
+    $currentPath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $newPath = "$installDir\$selectedVersion"
+
+    # Remove existing Terraform paths from the PATH environment variable
+    $currentPath = $currentPath -split ';' | Where-Object { ($_ -notlike "*$installDir*") -or ($_ -eq $newPath) }
+    $currentPath = $currentPath -join ';'
+
+    # Add the new Terraform path to the PATH environment variable
+    $newPathVariable = "$currentPath;$newPath"
+    [System.Environment]::SetEnvironmentVariable("Path", $newPathVariable, "Machine")
+
 }
